@@ -1,0 +1,170 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clientes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -304
+      ],
+      "id": "f1235284-acb1-4fd6-a121-95d080b47144",
+      "name": "Webhook",
+      "webhookId": "d813a461-dff0-455e-936f-40edd65ecacf"
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        -304
+      ],
+      "id": "ebdb8d4e-e7c3-4131-b6f7-2d4b5920c090",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega o CSV como texto vindo do HTTP Request\nconst csvRaw = $json.data ?? $json.body ?? $json;\nconst text = typeof csvRaw === \"string\"\n  ? csvRaw\n  : JSON.stringify(csvRaw);\n\n// Divide o CSV em linhas\nconst lines = text\n  .split(/\\r?\\n/)\n  .map(line => line.trim())\n  .filter(Boolean);\n\n// Cabeçalhos\nconst headers = lines[0]\n  .split(\",\")\n  .map(h => h.trim());\n\n// Converte as linhas em objetos\nconst investimentos = lines.slice(1).map(line => {\n  const cols = line\n    .split(\",\")\n    .map(c => c.trim());\n\n  const obj = {};\n\n  headers.forEach((h, i) => {\n    obj[h] = cols[i] ?? \"\";\n  });\n\n  // Converte mínimo para número\n  obj.minimo = Number(\n    String(obj.minimo).replace(/[^\\d]/g, \"\")\n  ) || 0;\n\n  return obj;\n});\n\n// Retorna os investimentos\nreturn [\n  {\n    json: {\n      investimentos\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -304
+      ],
+      "id": "fed8fd83-e117-4b71-943c-79be6d449fa6",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        688,
+        -544
+      ],
+      "id": "0a92539e-2a13-48af-86ee-3bfb7d5d6840",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega todos os dados recebidos\nconst entrada = $input.all();\n\n// Pega os clientes enviados pelo Webhook\nconst clientes = $(\"Webhook\").all().map(item => item.json);\n\n// Pega os investimentos processados pelo primeiro Code\nconst investimentos = entrada[0]?.json?.investimentos || [];\n\n// Escolhe uma mensagem aleatória\nfunction pick(lista) {\n  return lista[Math.floor(Math.random() * lista.length)];\n}\n\n// Processa cada cliente\nconst resultados = clientes.map(cliente => {\n\n  const nome = cliente.nome;\n  const email = cliente.email;\n  const perfil = cliente.perfil?.toLowerCase() || \"conservador\";\n\n  // Converte o saldo para número\n  const saldoNum = Number(\n    String(cliente.saldo || 0)\n      .replace(\"R$\", \"\")\n      .replace(/\\./g, \"\")\n      .replace(\",\", \".\")\n      .trim()\n  );\n\n  // Procura investimentos compatíveis com o perfil\n  const recomendacoes = investimentos.filter(\n    investimento =>\n      investimento.perfil?.toLowerCase() === perfil\n  );\n\n  // Escolhe uma recomendação\n  const escolhido = recomendacoes.length > 0\n    ? pick(recomendacoes)\n    : investimentos[0];\n\n  const motivo =\n    `Recomendação baseada no seu perfil ${perfil} e no saldo disponível de ${cliente.saldo}.`;\n\n  const mensagens = [\n    `Olá ${nome}, encontramos uma recomendação de investimento para você: ${escolhido?.nome}.`,\n    `${nome}, com base no seu perfil ${perfil}, encontramos uma opção que pode ser interessante: ${escolhido?.nome}.`,\n    `Olá ${nome}! Sua recomendação personalizada está pronta: ${escolhido?.nome}.`\n  ];\n\n  return {\n    nome,\n    email,\n    perfil,\n    saldo_texto: cliente.saldo,\n    saldo_num: saldoNum,\n    recomendacao: escolhido,\n    motivo,\n    mensagem_escolhida: pick(mensagens)\n  };\n});\n\n// Retorna os resultados\nreturn [\n  {\n    json: {\n      ok: true,\n      total_clientes: resultados.length,\n      total_investimentos: investimentos.length,\n      resultados\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -288
+      ],
+      "id": "db11a273-11db-40bb-9b70-91dedcefb9d4",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1120,
+        -288
+      ],
+      "id": "05877ea6-ead1-49df-8ae9-a907fad502b0",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6491f64e-991a-42ff-ab61-8fe48548c375",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5744ff0ab059f71b467cbfe641ba29b406eae3e9070cac7bbab82755fad4a063"
+  },
+  "nodeGroups": [],
+  "id": "fK6HgXTHoP2ki5lb",
+  "tags": []
+}
